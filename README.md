@@ -32,6 +32,12 @@ Inspired by compete between generatir and discriminator in GAN. ATN and ADN can 
 
 Better attack result curve than ATN 1.
 
+## About A3GN
+
+My understand of VAVE:
+
+![](https://raw.githubusercontent.com/HaojieYuan/img_links/master/imgs/20190422195438.png)
+
 ## Progress
 
 - [ ] Re-Implement paper ATN 1.
