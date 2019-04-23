@@ -40,8 +40,8 @@ My understand of VAVE:
 
 ## Progress
 
-- [ ] Re-Implement paper ATN 1.
-- [ ] Implement ATN.
+- [ ] Re-Implement paper ATN 1.(abort as model has to be re-trained for new taregt)
+- [x] Implement ATN.
 - [ ] Implement ADN.
 - [ ] Converge in training.
 - [ ] Test & Analyze.
