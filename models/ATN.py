@@ -10,11 +10,11 @@ def conv3x3(in_channels, out_channels):
 class ResBlock(nn.Module):
     """ Residual block with same input & output size """
     def __init__(self, in_channels, out_channels):
-        super(ResidualBlock, self).__init__()
+        super(ResBlock, self).__init__()
         self.conv1 = conv3x3(in_channels, out_channels)
         self.in1 = nn.InstanceNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(in_channels, out_channels)
+        self.conv2 = conv3x3(out_channels, out_channels)
         self.in2 = nn.InstanceNorm2d(out_channels)
         if in_channels != out_channels:
             self.downsample = nn.Sequential(conv3x3(in_channels, out_channels),
@@ -29,7 +29,7 @@ class ResBlock(nn.Module):
         out = self.relu(out)
         out = self.conv2(out)
         out = self.in2(out)
-        out = out + indentity
+        out = out + identity
         out = self.relu(out)
         return out
 
@@ -63,25 +63,25 @@ class ATN(nn.Module):
         def concat_channel(tensor_list):
             return torch.cat(tensor_list, dim=1)
         self.concat = concat_channel
-        self.res1 = ResBlock(256, 512)
+        self.res1 = ResBlock(512, 512)
         self.res2 = ResBlock(512, 512)
         self.res3 = ResBlock(512, 256)
         self.res4 = ResBlock(256, 128)
         self.res5 = ResBlock(128, 64)
         self.conv1 = conv3x3(64, 3)
-        self.tanh = nn.Tanh()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, source, target):
         source_feature = self.fe1(source)
         target_feature = self.fe2(target)
         combined_feature = self.concat((source_feature, target_feature))
         out = self.res1(combined_feature)
-        out = self.res2(combined_feature)
-        out = self.res3(combined_feature)
-        out = self.res4(combined_feature)
-        out = self.res5(combined_feature)
+        out = self.res2(out)
+        out = self.res3(out)
+        out = self.res4(out)
+        out = self.res5(out)
         out = self.conv1(out)
-        out = self.tanh(out)
+        out = self.sigmoid(out)
 
         return out
 
