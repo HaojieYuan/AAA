@@ -54,6 +54,7 @@ def load_face_model():
     return model
     
 def image2tensor(image_obj, batch_dim=True):
+    # if batch_dim, return 4 dim image tensor.
     np_img = np.array(image_obj)
     if batch_dim:
         np_img = np_img.reshape((-1,*np_img.shape))
