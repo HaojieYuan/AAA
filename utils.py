@@ -53,11 +53,14 @@ def load_face_model():
     load_state_local(ckpt_path, model)
     return model
     
-def image2tensor(image_obj):
+def image2tensor(image_obj, batch_dim=True):
     np_img = np.array(image_obj)
-    np_img = np_img.reshape((-1,*np_img.shape))
-    t_img = torch.from_numpy(np_img)
-    
-    return t_img.permute(0, 3, 1, 2).to(dtype=torch.float32)
+    if batch_dim:
+        np_img = np_img.reshape((-1,*np_img.shape))
+        t_img = torch.from_numpy(np_img)
+        return t_img.permute(0, 3, 1, 2).to(dtype=torch.float32)
+    else:
+        t_img = torch.from_numpy(np_img)
+        return t_img.permute(2, 0, 1).to(dtype=torch.float32)
 
 
