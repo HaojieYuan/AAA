@@ -57,16 +57,24 @@ class AVAE(nn.Module):
     def __init__(self):
         super(AVAE, self).__init__()
         self.res1 = ResBlock(3, 16, down_sample=True)
+        self.non_local1 = NonLocal(16)
         self.res2 = ResBlock(16, 32, down_sample=True)
+        self.non_local2 = NonLocal(32)
         self.res3 = ResBlock(32, 64, down_sample=True)
+        self.non_local3 = NonLocal(64)
         self.res4 = ResBlock(64, 128, down_sample=True)
+        self.non_local4 = NonLocal(128)
         self.fc1 = nn.Linear(128*7*7, 7)
         
     def forward(self, x):
         out = self.res1(x)
+        out = self.non_local1(out)
         out = self.res2(out)
+        out = self.non_local2(out)
         out = self.res3(out)
+        out = self.non_local3(out)
         out = self.res4(out)
+        out = self.non_local4(out)
         out = out.view(out.shape[0], -1)
         out = self.fc1(out)
         
@@ -123,7 +131,32 @@ class ResBlock(nn.Module):
         out = self.relu(out)
         
         return out
+
+class NonLocal(nn.Module):
+    def __init__(self, in_channels):
+        super(NonLocal, self).__init__()
+        self.downsample = Downsample(in_channels, in_channels)
+        self.in1 = nn.InstanceNorm2d(in_channels)
+        self.relu = nn.ReLU(inplace=True)
         
+    def forward(self, x):
+        identity = x
+        x_reshape1 = x.view(x.shape[0], x.shape[1], -1) #[N, C, HW]
+        x_reshape1 = x_reshape1.permute(0, 2, 1) #[N, HW, C]
+        x_downsample = self.downsample(x) #[N, C, H/2, W/2]
+        x_reshape2 = x_downsample.view(x_downsample.shape[0],
+                                       x_downsample.shape[1], -1) #[N, C, HW/4]
+        mul1 = torch.matmul(x_reshape1, x_reshape2) #[N, HW, HW/4]
+        mul1_reshape = mul1.permute(0, 2, 1) #[N, HW/4, HW]
+        mul2 = torch.matmul(x_reshape2, mul1_reshape) #[N, C, HW]
+        mul2_reshape = mul2.view(*x.shape)
+        
+        out = self.in1(mul2_reshape)
+        out = out + identity
+        out = self.relu(out)
+        return out
+    
+    
 class Downsample(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(Downsample, self).__init__()
