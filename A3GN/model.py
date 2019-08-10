@@ -1,56 +1,65 @@
 import torch
 import torch.nn as nn
 
-   
 class AttentionalGenerator(nn.Module):
     def __init__(self):
         super(AttentionalGenerator, self).__init__()
         # concat oringinal face with latent code.
         self.concat = Concatenator()
-        
+
+        self.conv0 = nn.Conv2d(10, 64, kernel_size=7, stride=1, padding=3, bias=False)
         # 2 convolution layers for down sampling.
-        self.conv1 = Downsample(10, 32)
-        self.conv2 = Downsample(32, 64)
-        
+        self.conv1 = Downsample(64, 128)
+        self.conv2 = Downsample(128, 256)
+
         # after 2 subsampling, introduce squeeze-and-excitation operations.
         # finally, weemploy scaling to rescalse the transformation output.
-        self.ses = SqueezeExcitationScale()
-        
+        #self.ses = SqueezeExcitationScale()
+
         # 6 Resisual blocks, use instance normalization in generator.
-        self.res1 = ResBlock(64, 128, Normalization=True)
-        self.res2 = ResBlock(128, 256, Normalization=True)
-        self.res3 = ResBlock(256, 512, Normalization=True)
-        self.res4 = ResBlock(512, 256, Normalization=True)
-        self.res5 = ResBlock(256, 128, Normalization=True)
-        self.res6 = ResBlock(128, 64, Normalization=True)
-        
+        self.res1 = ResBlock(256, 256)
+        self.res2 = ResBlock(256, 256)
+        self.res3 = ResBlock(256, 256)
+        self.res4 = ResBlock(256, 256)
+        self.res5 = ResBlock(256, 256)
+        self.res6 = ResBlock(256, 256)
+
         # 2 convolution layers for upsampling.
-        self.deconv1 = Upsample(64, 32)
-        self.deconv2 = Upsample(32, 3, Norm=False, activation='tanh')
-        
-        
+        self.deconv1 = Upsample(256, 128)
+        self.deconv2 = Upsample(128, 64)
+
+        self.conv3 = nn.Conv2d(64, 3, kernel_size=7, stride=1, padding=3, bias=False)
+        self.tanh = nn.Tanh()
+
+
     def forward(self, x, z):
         out = self.concat(x, z)
+        out = self.conv0(out)
         out = self.conv1(out)
         out = self.conv2(out)
-        
+
         out = self.res1(out)
-        out = self.ses(out)
+        #out = self.ses(out)
         out = self.res2(out)
-        out = self.ses(out)
+        #out = self.ses(out)
         out = self.res3(out)
-        out = self.ses(out)
+        #out = self.ses(out)
         out = self.res4(out)
-        out = self.ses(out)
+        #out = self.ses(out)
         out = self.res5(out)
-        out = self.ses(out)
+        #out = self.ses(out)
         out = self.res6(out)
-        out = self.ses(out)
-        
+        #out = self.ses(out)
+
         out = self.deconv1(out)
         out = self.deconv2(out)
-        
+
+        out = self.conv3(out)
+        out = self.tanh(out)
+
         return out
+   
+
 
 
 class AVAE(nn.Module):
@@ -82,8 +91,31 @@ class AVAE(nn.Module):
 
     
 class SimpleDiscriminator(nn.Module):
-    # PatchGAN discriminator
-    pass
+    """Discriminator network with PatchGAN."""
+    def __init__(self, image_size=112, conv_dim=64, c_dim=5, repeat_num=5):
+        super(SimpleDiscriminator, self).__init__()
+        layers = []
+        layers.append(nn.Conv2d(3, conv_dim, kernel_size=4, stride=2, padding=1))
+        layers.append(nn.LeakyReLU(0.01))
+
+        curr_dim = conv_dim
+        for i in range(1, repeat_num):
+            layers.append(nn.Conv2d(curr_dim, curr_dim*2, kernel_size=4, stride=2, padding=1))
+            layers.append(nn.LeakyReLU(0.01))
+            curr_dim = curr_dim * 2
+
+        #kernel_size = int(image_size / np.power(2, repeat_num))
+        self.main = nn.Sequential(*layers)
+        self.conv1 = nn.Conv2d(curr_dim, 1, kernel_size=3, stride=1, padding=1, bias=False)
+        #self.conv2 = nn.Conv2d(curr_dim, c_dim, kernel_size=kernel_size, bias=False)
+
+    def forward(self, x):
+        h = self.main(x)
+        out_src = self.conv1(h)
+        #out_cls = self.conv2(h)
+
+        #return out_src, out_cls.view(out_cls.size(0), out_cls.size(1))
+        return out_src
     
     
 class SqueezeExcitationScale(nn.Module):
@@ -101,36 +133,17 @@ class SqueezeExcitationScale(nn.Module):
         return out
         
 class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, 
-                 down_sample=False, Normalization=False):
-        super(ResBlock, self).__init__()
-        self.stride = 2 if down_sample else 1
-        if down_sample:
-            self.id_map = Downsample(in_channels, out_channels)
-        else:
-            self.id_map = conv3x3(in_channels, out_channels)
-        self.Norm = Normalization
-        self.conv1 = conv3x3(in_channels, out_channels, stride=self.stride)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(out_channels, out_channels)
-        if self.Norm:
-            self.in1 = nn.InstanceNorm2d(out_channels)
-            self.in2 = nn.InstanceNorm2d(out_channels)
-            
+    def __init__(self, dim_in, dim_out):
+        super(ResBlock2, self).__init__()
+        self.main = nn.Sequential(
+            nn.Conv2d(dim_in, dim_out, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm2d(dim_out, affine=True, track_running_stats=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(dim_out, dim_out, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm2d(dim_out, affine=True, track_running_stats=True))
+
     def forward(self, x):
-        identity = self.id_map(x)        
-        out = self.conv1(x)
-        if self.Norm:
-            out = self.in1(out)
-        out = self.relu(out)
-        
-        out = self.conv2(out)
-        if self.Norm:
-            out = self.in2(out)
-        out = out + identity
-        out = self.relu(out)
-        
-        return out
+        return x + self.main(x)
 
 class NonLocal(nn.Module):
     def __init__(self, in_channels):
